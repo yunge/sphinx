@@ -40,11 +40,11 @@ opts := &Options{
 	Timeout: 5000,
 }
 
-sc := NewClient(opts)
+sc := sphinx.NewClient(opts)
 
 // Or use this style:
 // Note: SetServer("", 0) means use default value.
-sc := NewClient().SetServer(host, 0).SetConnectTimeout(5000)
+sc := sphinx.NewClient().SetServer(host, 0).SetConnectTimeout(5000)
 if err := sc.Error(); err != nil {
 	// handle err
 }
