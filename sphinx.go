@@ -230,7 +230,7 @@ var DefaultOptions = &Options{
 }
 
 func NewClient(opts ...*Options) (sc *Client) {
-	if len(opts) > 1 {
+	if opts != nil {
 		return &Client{Options: opts[0]}
 	}
 	return &Client{Options: DefaultOptions}
