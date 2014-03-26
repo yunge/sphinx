@@ -765,10 +765,9 @@ func (sc *Client) RunQueries() (results []Result, err error) {
 	if err != nil {
 		return nil, err
 	}
-
 	p := 0
 	for i := 0; i < nreqs; i++ {
-		var result = Result{Status: -1} // Default value of stauts is 0, but SEARCHD_OK = 0, so must set it to another num.
+		var result = Result{Status: -1} // Default value of status is 0, but SEARCHD_OK = 0, so must set it to another num.
 
 		result.Status = int(binary.BigEndian.Uint32(response[p : p+4]))
 		p += 4
@@ -782,6 +781,7 @@ func (sc *Client) RunQueries() (results []Result, err error) {
 				result.Warning = string(message)
 			} else {
 				result.Error = errors.New(string(message))
+				results = append(results, result)
 				continue
 			}
 		}
