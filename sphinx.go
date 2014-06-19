@@ -905,7 +905,7 @@ func (sc *Client) RunQueries() (results []Result, err error) {
 
 		results = append(results, result)
 	}
-
+	sc.reqs = nil
 	return
 }
 
