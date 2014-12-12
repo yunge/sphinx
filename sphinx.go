@@ -1299,6 +1299,8 @@ func (sc *Client) connect() (err error) {
 		return fmt.Errorf("connect() conn.Write() > %d bytes, %v", i, err)
 	}
 
+	sc.conn.SetDeadline(time.Time{})
+
 	return
 }
 
