@@ -1071,7 +1071,7 @@ func (sc *Client) UpdateAttributes(index string, attrs []string, values [][]inte
 	if len(attrs) == 0 {
 		return -1, errors.New("UpdateAttributes > no attribute names provided!")
 	}
-	if len(values) < 2 {
+	if len(values) < 1 {
 		return -1, errors.New("UpdateAttributes > no update values provided!")
 	}
 
