@@ -89,7 +89,9 @@ func (sc *Client) Execute(sqlStr string) (result sql.Result, err error) {
 			return nil, fmt.Errorf("Execute> %v", err)
 		}
 	}
-	defer sc.DB.Close()
+	// It is rare to Close a DB, as the DB handle is meant to be
+        // long-lived and shared between many goroutines.
+	//defer sc.DB.Close()
 	return sc.DB.Exec(sqlStr)
 }
 
