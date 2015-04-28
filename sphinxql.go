@@ -65,8 +65,10 @@ func (sc *Client) GetDb() (err error) {
 // Caller should close db.
 func (sc *Client) Init(obj interface{}) (err error) {
 	// Init sql.DB
-	if err = sc.GetDb(); err != nil {
-		return fmt.Errorf("Init > %v", err)
+	if sc.DB == nil {
+		if err = sc.GetDb(); err != nil {
+			return fmt.Errorf("Init > %v", err)
+		}
 	}
 
 	// Get object's reflect.Value
