@@ -58,6 +58,11 @@ func (sc *Client) GetDb() (err error) {
 	if sc.DB, err = sql.Open("mysql", addr+"/"); err != nil {
 		return err
 	}
+	
+	// FIXME
+	// The returned DB is safe for concurrent use by multiple goroutines and maintains its own pool of idle connections. 
+	//sc.DB.SetMaxOpenConns(100)
+	sc.DB.SetMaxIdleConns(10)
 
 	return
 }
@@ -65,9 +70,11 @@ func (sc *Client) GetDb() (err error) {
 // Caller should close db.
 func (sc *Client) Init(obj interface{}) (err error) {
 	// Init sql.DB
-	if err = sc.GetDb(); err != nil {
-		return fmt.Errorf("Init > %v", err)
-	}
+	//if sc.DB == nil {
+	//	if err = sc.GetDb(); err != nil {
+	//		return fmt.Errorf("Init > %v", err)
+	//	}
+	//}
 
 	// Get object's reflect.Value
 	if obj != nil { //some functions do not need sc.val
@@ -89,7 +96,9 @@ func (sc *Client) Execute(sqlStr string) (result sql.Result, err error) {
 			return nil, fmt.Errorf("Execute> %v", err)
 		}
 	}
-	defer sc.DB.Close()
+	// It is rare to Close a DB, as the DB handle is meant to be
+        // long-lived and shared between many goroutines.
+	//defer sc.DB.Close()
 	return sc.DB.Exec(sqlStr)
 }
 
