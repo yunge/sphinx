@@ -1385,11 +1385,11 @@ func (sc *Client) doRequest(command int, version int, req []byte) (res []byte, e
 		// do nothing
 	case SEARCHD_WARNING:
 		wlen := binary.BigEndian.Uint32(res[0:4])
-		sc.warning = string(res[4:wlen])
+		sc.warning = string(res[4:4+wlen])
 		res = res[4+wlen:]
 	case SEARCHD_ERROR, SEARCHD_RETRY:
 		wlen := binary.BigEndian.Uint32(res[0:4])
-		return nil, fmt.Errorf("doRequest > SEARCHD_ERROR: " + string(res[4:wlen]))
+		return nil, fmt.Errorf("doRequest > SEARCHD_ERROR: " + string(res[4:4+wlen]))
 	default:
 		return nil, fmt.Errorf("doRequest > unknown status code (status=%d), ver: %d", status, ver)
 	}
