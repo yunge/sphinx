@@ -765,17 +765,15 @@ func (sc *Client) RunQueries() (results []Result, err error) {
 	if err != nil {
 		return nil, err
 	}
-	p := 0
+
+	var bp = byteParser{stream: response}
+
 	for i := 0; i < nreqs; i++ {
 		var result = Result{Status: -1} // Default value of status is 0, but SEARCHD_OK = 0, so must set it to another num.
 
-		result.Status = int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
+		result.Status = bp.Int32()
 		if result.Status != SEARCHD_OK {
-			length := int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
-			message := response[p : p+length]
-			p += length
+			message := bp.String()
 
 			if result.Status == SEARCHD_WARNING {
 				result.Warning = string(message)
@@ -787,46 +785,32 @@ func (sc *Client) RunQueries() (results []Result, err error) {
 		}
 
 		// read schema
-		nfields := int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
+		nfields := bp.Int32()
 		result.Fields = make([]string, nfields)
 		for fieldNum := 0; fieldNum < nfields; fieldNum++ {
-			fieldLen := int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
-			result.Fields[fieldNum] = string(response[p : p+fieldLen])
-			p += fieldLen
+			result.Fields[fieldNum] = bp.String()
 		}
 
-		nattrs := int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
+		nattrs := bp.Int32()
 		result.AttrNames = make([]string, nattrs)
 		result.AttrTypes = make([]int, nattrs)
 		for attrNum := 0; attrNum < nattrs; attrNum++ {
-			attrLen := int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
-			result.AttrNames[attrNum] = string(response[p : p+attrLen])
-			p += attrLen
-			result.AttrTypes[attrNum] = int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
+			result.AttrNames[attrNum] = bp.String()
+			result.AttrTypes[attrNum] = bp.Int32()
 		}
 
 		// read match count
-		count := int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
-		id64 := binary.BigEndian.Uint32(response[p : p+4]) // if id64 == 1, then docId is uint64
-		p += 4
+		count := bp.Int32()
+		id64 := bp.Int32() // if id64 == 1, then docId is uint64
 		result.Matches = make([]Match, count)
 		for matchesNum := 0; matchesNum < count; matchesNum++ {
 			var match Match
 			if id64 == 1 {
-				match.DocId = binary.BigEndian.Uint64(response[p : p+8])
-				p += 8
+				match.DocId = bp.Uint64()
 			} else {
-				match.DocId = uint64(binary.BigEndian.Uint32(response[p : p+4]))
-				p += 4
+				match.DocId = uint64(bp.Uint32())
 			}
-			match.Weight = int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
+			match.Weight = bp.Int32()
 
 			match.AttrValues = make([]interface{}, nattrs)
 
@@ -834,73 +818,51 @@ func (sc *Client) RunQueries() (results []Result, err error) {
 				attrType := result.AttrTypes[attrNum]
 				switch attrType {
 				case SPH_ATTR_BIGINT:
-					match.AttrValues[attrNum] = binary.BigEndian.Uint64(response[p : p+8])
-					p += 8
+					match.AttrValues[attrNum] = bp.Uint64()
 				case SPH_ATTR_FLOAT:
-					var f float32
-					buf := bytes.NewBuffer(response[p : p+4])
-					if err := binary.Read(buf, binary.BigEndian, &f); err != nil {
+					f, err := bp.Float32()
+					if err != nil {
 						return nil, fmt.Errorf("binary.Read error: %v", err)
 					}
 					match.AttrValues[attrNum] = f
-					p += 4
 				case SPH_ATTR_STRING:
-					slen := int(binary.BigEndian.Uint32(response[p : p+4]))
-					p += 4
-					match.AttrValues[attrNum] = ""
-					if slen > 0 {
-						match.AttrValues[attrNum] = response[p : p+slen]
-					}
-					p += slen //p += slen-4
+					match.AttrValues[attrNum] = bp.String()
 				case SPH_ATTR_MULTI: // SPH_ATTR_MULTI is 2^30+1, not an int value.
-					nvals := int(binary.BigEndian.Uint32(response[p : p+4]))
-					p += 4
+					nvals := bp.Int32()
 					var vals = make([]uint32, nvals)
 					for valNum := 0; valNum < nvals; valNum++ {
-						vals[valNum] = binary.BigEndian.Uint32(response[p : p+4])
-						p += 4
+						vals[valNum] = bp.Uint32()
 					}
 					match.AttrValues[attrNum] = vals
 				case SPH_ATTR_MULTI64:
-					nvals := int(binary.BigEndian.Uint32(response[p : p+4]))
-					p += 4
+					nvals := bp.Int32()
 					nvals = nvals / 2
 					var vals = make([]uint64, nvals)
 					for valNum := 0; valNum < nvals; valNum++ {
-						vals[valNum] = binary.BigEndian.Uint64(response[p : p+4])
-						p += 8
+						vals[valNum] = uint64(bp.Uint32())
+						bp.Uint32()
 					}
 					match.AttrValues[attrNum] = vals
 				default: // handle everything else as unsigned ints
-					match.AttrValues[attrNum] = binary.BigEndian.Uint32(response[p : p+4])
-					p += 4
+					match.AttrValues[attrNum] = bp.Uint32()
 				}
 			}
 			result.Matches[matchesNum] = match
 		}
 
-		result.Total = int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
-		result.TotalFound = int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
+		result.Total = bp.Int32()
+		result.TotalFound = bp.Int32()
 
-		msecs := binary.BigEndian.Uint32(response[p : p+4])
-		p += 4
+		msecs := bp.Uint32()
 		result.Time = float32(msecs) / 1000.0
 
-		nwords := int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
+		nwords := bp.Int32()
 
 		result.Words = make([]WordInfo, nwords)
 		for wordNum := 0; wordNum < nwords; wordNum++ {
-			wordLen := int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
-			result.Words[wordNum].Word = string(response[p : p+wordLen])
-			p += wordLen
-			result.Words[wordNum].Docs = int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
-			result.Words[wordNum].Hits = int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
+			result.Words[wordNum].Word = bp.String()
+			result.Words[wordNum].Docs = bp.Int32()
+			result.Words[wordNum].Hits = bp.Int32()
 		}
 
 		results = append(results, result)
@@ -1046,13 +1008,11 @@ func (sc *Client) BuildExcerpts(docs []string, index, words string, opts Excerpt
 		return nil, err
 	}
 
+	var bp = byteParser{stream: response}
+
 	resDocs = make([]string, len(docs))
-	p := 0
 	for i := 0; i < len(docs); i++ {
-		length := int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
-		resDocs[i] = string(response[p : p+length])
-		p += length
+		resDocs[i] = bp.String()
 	}
 
 	return resDocs, nil
@@ -1169,29 +1129,21 @@ func (sc *Client) BuildKeywords(query, index string, hits bool) (keywords []Keyw
 		return nil, err
 	}
 
-	p := 0
-	nwords := int(binary.BigEndian.Uint32(response[p : p+4]))
-	p += 4
+	var bp = byteParser{stream: response}
+
+	nwords := bp.Int32()
 
 	keywords = make([]Keyword, nwords)
 
 	for i := 0; i < nwords; i++ {
 		var k Keyword
-		length := int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
-		k.Tokenized = string(response[p : p+length])
-		p += length
+		k.Tokenized = bp.String()
 
-		length = int(binary.BigEndian.Uint32(response[p : p+4]))
-		p += 4
-		k.Normalized = string(response[p : p+length])
-		p += length
+		k.Normalized = bp.String()
 
 		if hits {
-			k.Docs = int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
-			k.Hits = int(binary.BigEndian.Uint32(response[p : p+4]))
-			p += 4
+			k.Docs = bp.Int32()
+			k.Hits = bp.Int32()
 		}
 		keywords[i] = k
 	}
@@ -1216,20 +1168,16 @@ func (sc *Client) Status() (response [][]string, err error) {
 		return nil, err
 	}
 
-	p := 0
-	rows := binary.BigEndian.Uint32(res[p : p+4])
-	p += 4
-	cols := binary.BigEndian.Uint32(res[p : p+4])
-	p += 4
+	var bp = byteParser{stream: res}
+
+	rows := bp.Uint32()
+	cols := bp.Uint32()
 
 	response = make([][]string, rows)
 	for i := 0; i < int(rows); i++ {
 		response[i] = make([]string, cols)
 		for j := 0; j < int(cols); j++ {
-			length := int(binary.BigEndian.Uint32(res[p : p+4]))
-			p += 4
-			response[i][j] = string(res[p : p+length])
-			p += length
+			response[i][j] = bp.String()
 		}
 	}
 	return response, nil
@@ -1433,4 +1381,46 @@ func writeLenStrToBytes(bs []byte, s string) []byte {
 // For SetGeoAnchor()
 func DegreeToRadian(degree float32) float32 {
 	return degree * math.Pi / 180
+}
+
+
+type byteParser struct {
+	stream []byte
+	p int
+}
+
+func (bp *byteParser) Int32() (i int) {
+	i = int(binary.BigEndian.Uint32(bp.stream[bp.p : bp.p+4]))
+	bp.p += 4
+	return
+}
+
+func (bp *byteParser) Uint32() (i uint32) {
+	i = binary.BigEndian.Uint32(bp.stream[bp.p : bp.p+4])
+	bp.p += 4
+	return
+}
+
+func (bp *byteParser) Uint64() (i uint64) {
+	i = binary.BigEndian.Uint64(bp.stream[bp.p : bp.p+8])
+	bp.p += 8
+	return
+}
+
+func (bp *byteParser) Float32() (f float32, err error) {
+	buf := bytes.NewBuffer(bp.stream[bp.p : bp.p + 4])
+	bp.p += 4
+	if err := binary.Read(buf, binary.BigEndian, &f); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func (bp *byteParser) String() (s string) {
+	s = ""
+	if slen := bp.Int32(); slen > 0 {
+		s = string(bp.stream[bp.p : bp.p+slen])
+		bp.p += slen
+	}
+	return
 }
