@@ -1411,7 +1411,7 @@ func (bp *byteParser) Float32() (f float32, err error) {
 	buf := bytes.NewBuffer(bp.stream[bp.p : bp.p + 4])
 	bp.p += 4
 	if err := binary.Read(buf, binary.BigEndian, &f); err != nil {
-		return nil, err
+		return 0, err
 	}
 	return f, nil
 }
